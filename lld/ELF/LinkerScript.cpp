@@ -792,9 +792,18 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
   // https://sourceware.org/binutils/docs-2.20/ld/Output-Section-LMA.html
   // This, however, should only be done by the first "non-header" section
   // in the segment.
-  if (PhdrEntry *l = ctx->outSec->ptLoad)
+  if (PhdrEntry *l = ctx->outSec->ptLoad) {
     if (sec == findFirstSection(l))
       l->lmaOffset = ctx->lmaOffset;
+
+    if (l->firstSec && (sec->addr < l->firstSec->addr)) {
+      l->firstSec = sec;
+      l->lmaOffset = ctx->lmaOffset;
+    }
+
+    if (l->lastSec && (sec->addr >= l->lastSec->addr))
+      l->lastSec = sec;
+  }
 
   // We can call this method multiple times during the creation of
   // thunks and want to start over calculation each time.
