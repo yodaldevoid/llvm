@@ -590,16 +590,16 @@ template <class ELFT> void Writer<ELFT>::run() {
 
   script->allocateHeaders(mainPart->phdrs);
 
+  if (!config->oFormatBinary)
+    assignFileOffsets();
+  else
+    assignFileOffsetsBinary();
+
   // Remove empty PT_LOAD to avoid causing the dynamic linker to try to mmap a
   // 0 sized region. This has to be done late since only after assignAddresses
   // we know the size of the sections.
   for (Partition &part : partitions)
     removeEmptyPTLoad(part.phdrs);
-
-  if (!config->oFormatBinary)
-    assignFileOffsets();
-  else
-    assignFileOffsetsBinary();
 
   for (Partition &part : partitions)
     setPhdrs(part);
@@ -2277,9 +2277,15 @@ template <class ELFT> void Writer<ELFT>::assignFileOffsets() {
 
   PhdrEntry *lastRX = nullptr;
   for (Partition &part : partitions)
-    for (PhdrEntry *p : part.phdrs)
+    for (PhdrEntry *p : part.phdrs) {
+      if (!p->firstSec)
+        continue;
+      uint64_t size = p->lastSec->addr + p->lastSec->size - p->firstSec->addr;
+      if (size == 0)
+        continue;
       if (p->p_type == PT_LOAD && (p->p_flags & PF_X))
         lastRX = p;
+    }
 
   for (Partition &part : partitions)
     for (PhdrEntry *p : part.phdrs) {
