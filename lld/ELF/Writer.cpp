@@ -2281,15 +2281,32 @@ template <class ELFT> void Writer<ELFT>::assignFileOffsets() {
       if (p->p_type == PT_LOAD && (p->p_flags & PF_X))
         lastRX = p;
 
-  for (OutputSection *sec : outputSections) {
-    off = setFileOffset(sec, off);
+  for (Partition &part : partitions)
+    for (PhdrEntry *p : part.phdrs) {
+      std::vector<OutputSection*> phdrSections;
+      for (OutputSection *sec : outputSections)
+        if (sec->ptLoad && sec->ptLoad == p)
+          phdrSections.push_back(sec);
 
-    // If this is a last section of the last executable segment and that
-    // segment is the last loadable segment, align the offset of the
-    // following section to avoid loading non-segments parts of the file.
-    if (config->zSeparateCode && lastRX && lastRX->lastSec == sec)
-      off = alignTo(off, config->commonPageSize);
-  }
+      llvm::stable_sort(phdrSections, [](OutputSection *a, OutputSection *b) {
+          return a->addr < b->addr;
+      });
+
+      for (OutputSection *sec : phdrSections) {
+        off = setFileOffset(sec, off);
+
+        // If this is a last section of the last executable segment and that
+        // segment is the last loadable segment, align the offset of the
+        // following section to avoid loading non-segments parts of the file.
+        if (config->zSeparateCode && lastRX && lastRX->lastSec == sec)
+          off = alignTo(off, config->commonPageSize);
+      }
+    }
+
+  for (OutputSection *sec : outputSections)
+    if (!sec->ptLoad) {
+      off = setFileOffset(sec, off);
+    }
 
   sectionHeaderOff = alignTo(off, config->wordsize);
   fileSize = sectionHeaderOff + (outputSections.size() + 1) * sizeof(Elf_Shdr);
