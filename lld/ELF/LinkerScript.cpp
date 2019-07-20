@@ -750,10 +750,12 @@ MemoryRegion *LinkerScript::findMemoryRegion(OutputSection *sec) {
 }
 
 static OutputSection *findFirstSection(PhdrEntry *load) {
+  OutputSection *firstSec = nullptr;
   for (OutputSection *sec : outputSections)
     if (sec->ptLoad == load)
-      return sec;
-  return nullptr;
+      if (!firstSec || (sec->addr < firstSec->addr))
+        firstSec = sec;
+  return firstSec;
 }
 
 // This function assigns offsets to input sections and an output section
